@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.env
+*.env
+*.log
+*.tar
+*.tar.gz
+*.sqlite*
+.venv/
+.DS_Store
+/fnos-openclaw-compat.fpk

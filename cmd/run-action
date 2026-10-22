@@ -1,0 +1,43 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+: "${TRIM_APPDEST:?missing TRIM_APPDEST}"
+: "${TRIM_PKGVAR:?missing TRIM_PKGVAR}"
+mkdir -p -- "$TRIM_PKGVAR"
+log_file="$TRIM_PKGVAR/compat-jobs.log"
+job_action="${wizard_action:-check}"
+job_browser="${wizard_browser:-yes}"
+fail() {
+    local message="$1"
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+        printf '%s\n' "$message" > "$TRIM_TEMP_LOGFILE"
+    fi
+    printf '%s\n' "$message" >&2
+    exit 1
+}
+[ "$(id -u)" = 0 ] || fail '兼容助手需要 root 生命周期权限。'
+command -v python3 >/dev/null || fail '未找到 Python 3，请先在宿主机安装 Python 3.9 或更高版本。'
+case "$job_action" in
+    check) job_args=(check) ;;
+    apply)
+        job_args=(install)
+        case "$job_browser" in
+            yes) ;;
+            no) job_args+=(--without-browser) ;;
+            *) fail '浏览器选项无效。' ;;
+        esac
+        ;;
+    rollback)
+        [ -n "${wizard_backup:-}" ] || fail '回滚需要填写 compat-backups 中的完整备份目录。'
+        job_args=(rollback "$wizard_backup")
+        ;;
+    *) fail '操作类型无效。' ;;
+esac
+cd -- "$TRIM_APPDEST"
+sha256sum -c SHA256SUMS >> "$log_file" 2>&1 || fail '补丁包校验失败，未修改 OpenClaw。'
+printf '\n=== %s operation=%s ===\n' "$(date -Is)" "$job_action" >> "$log_file"
+if ! python3 "$TRIM_APPDEST/compat.py" "${job_args[@]}" >> "$log_file" 2>&1; then
+    fail '兼容助手操作失败。详细原因见原 OpenClaw 的 compat-backups/最新时间戳/install-error.log 或本助手的 compat-jobs.log；脚本会尝试恢复安装前快照。'
+fi
+printf '%s\n' "$job_action" > "$TRIM_PKGVAR/last-success"
+printf '%s\n' '操作成功。检查结果和备份路径已记录在本助手数据目录的 compat-jobs.log 中。'

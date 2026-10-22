@@ -1,0 +1,154 @@
+--- server/index.js.original
++++ server/index.js
+@@ -2547,12 +2547,12 @@
+ var MONITOR_ACCESS_MODE = process.env.MONITOR_ACCESS_MODE === "public" ? "public" : "lan";
+ var OPENCLAW_NPM_REGISTRY = process.env.OPENCLAW_NPM_REGISTRY || "https://registry.npmmirror.com/";
+ var OPENCLAW_VERSION = process.env.OPENCLAW_VERSION || "2026.5.4";
+-var OPENCLAW_PACKAGE_SPEC = `openclaw@${OPENCLAW_VERSION}`;
+-var OPENCLAW_UPDATE_PACKAGE_SPEC = process.env.OPENCLAW_UPDATE_PACKAGE_SPEC || "openclaw@latest";
++var OPENCLAW_PACKAGE_SPEC = "openclaw@2026.10.5"; // Locally pinned, including managed reinstall.
++var OPENCLAW_UPDATE_PACKAGE_SPEC = "openclaw@2026.10.5"; // Locally pinned: never resolve latest.
+ var OPENCLAW_FEISHU_PLUGIN_VERSION = process.env.OPENCLAW_FEISHU_PLUGIN_VERSION || "2026.5.4";
+ var OPENCLAW_WECOM_PLUGIN_VERSION = process.env.OPENCLAW_WECOM_PLUGIN_VERSION || "2026.5.7";
+ var OPENCLAW_DINGTALK_PLUGIN_VERSION = process.env.OPENCLAW_DINGTALK_PLUGIN_VERSION || "0.8.20";
+-var OPENCLAW_WEIXIN_PLUGIN_VERSION = process.env.OPENCLAW_WEIXIN_PLUGIN_VERSION || "2.4.1";
++var OPENCLAW_WEIXIN_PLUGIN_VERSION = process.env.OPENCLAW_WEIXIN_PLUGIN_VERSION || "2.4.10";
+ var OPENCLAW_QQBOT_PLUGIN_VERSION = process.env.OPENCLAW_QQBOT_PLUGIN_VERSION || "2026.5.4";
+ var OPENCLAW_CHANNEL_PLUGIN_SPECS = {
+   feishu: `@openclaw/feishu@${OPENCLAW_FEISHU_PLUGIN_VERSION}`,
+@@ -3370,7 +3370,7 @@
+     ...sharedEnv,
+     HOME: instance.homeDir,
+     OPENCLAW_CONFIG_PATH: configPath,
+-    PATH: prependToPath(process.env.PATH, `${instance.installDir}/node_modules/.bin`)
++    PATH: prependToPath(prependToPath(process.env.PATH, `${instance.installDir}/node_modules/.bin`), `${DATA_ROOT}/runtime`)
+   };
+ }
+ function openclawBinPath(instance) {
+@@ -3550,7 +3550,20 @@
+   }
+   return {};
+ }
++// Local fnOS compatibility: retain the managed UI with OpenClaw 2026.10.5+.
++async function normalizeManagedOpenclawConfig(instance, config) {
++  if (usesSystemOpenclaw(instance)) return config;
++  const pkg = await Bun.file(openclawPackageJsonPath(instance)).json();
++  if (compareOpenClawVersions(pkg.version, "2026.10.5") >= 0) {
++    if (config.meta) delete config.meta.lastTouchedAt;
++    if (config.gateway?.controlUi) delete config.gateway.controlUi.allowInsecureAuth;
++    if (config.gateway?.controlUi) delete config.gateway.controlUi.dangerouslyDisableDeviceAuth;
++    delete config.cli;
++  }
++  return config;
++}
+ async function writeInstanceConfig(instance, config) {
++  await normalizeManagedOpenclawConfig(instance, config);
+   if (!usesSystemOpenclaw(instance)) {
+     await ensureInstanceDirectories(instance);
+   }
+@@ -4222,6 +4235,7 @@
+     allowedOrigins: nextAllowedOrigins
+   });
+   mkdirSync4(dirname3(configPath), { recursive: true });
++  await normalizeManagedOpenclawConfig(instance, config);
+   await Bun.write(configPath, JSON.stringify(config, null, 2));
+   configCache.delete(configPath);
+   return true;
+@@ -4403,7 +4417,7 @@
+     responseHeaders.set("location", rewritten.toString());
+   } catch {}
+ }
+-function controlUiBootstrapScript(proxyBasePath) {
++function controlUiBootstrapScript(proxyBasePath, authToken) {
+   const serializedBasePath = JSON.stringify(proxyBasePath);
+   const serializedSettingsKey = JSON.stringify(CONTROL_UI_SETTINGS_KEY);
+   const serializedTokenKey = JSON.stringify(CONTROL_UI_TOKEN_KEY);
+@@ -4453,12 +4467,20 @@
+     "      }",
+     "    }",
+     "  } catch {}",
++    "  try {",
++    `    const token = ${JSON.stringify(authToken || "")};`,
++    "    if (token) {",
++    "      const url = new URL(window.location.href);",
++    "      url.hash = new URLSearchParams({ token }).toString();",
++    "      window.history.replaceState(null, '', url.toString());",
++    "    }",
++    "  } catch {}",
+     "})();",
+     "</script>"
+   ].join("");
+ }
+-function injectControlUiBootstrap(html, proxyBasePath) {
+-  const script = controlUiBootstrapScript(proxyBasePath);
++function injectControlUiBootstrap(html, proxyBasePath, authToken) {
++  const script = controlUiBootstrapScript(proxyBasePath, authToken);
+   if (html.includes('<script type="module"')) {
+     return html.replace('<script type="module"', `${script}<script type="module"`);
+   }
+@@ -4496,9 +4518,9 @@
+ }
+ function buildControlUiScriptSrcDirective(inlineScriptHashes) {
+   if (inlineScriptHashes.length === 0) {
+-    return "script-src 'self'";
+-  }
+-  return `script-src 'self' ${inlineScriptHashes.map((hash) => `'${hash}'`).join(" ")}`;
++    return "script-src 'self' 'wasm-unsafe-eval'";
++  }
++  return `script-src 'self' 'wasm-unsafe-eval' ${inlineScriptHashes.map((hash) => `'${hash}'`).join(" ")}`;
+ }
+ function rebuildControlUiCspHeader(existingHeader, patchedHtml) {
+   const inlineScriptHashes = computeInlineScriptHashes(patchedHtml);
+@@ -4526,8 +4548,11 @@
+ function applyPatchedControlUiHeaders(responseHeaders, patchedHtml) {
+   const updatedHeaders = new Headers(responseHeaders);
+   updatedHeaders.delete("content-length");
++  updatedHeaders.delete("content-encoding");
+   updatedHeaders.set("cache-control", "no-store");
+-  updatedHeaders.set("content-security-policy", rebuildControlUiCspHeader(updatedHeaders.get("content-security-policy"), patchedHtml));
++  updatedHeaders.set("x-frame-options", "SAMEORIGIN");
++  const csp = rebuildControlUiCspHeader(updatedHeaders.get("content-security-policy"), patchedHtml);
++  updatedHeaders.set("content-security-policy", csp.replace(/frame-ancestors\s+[^;]+/i, "frame-ancestors 'self'"));
+   return updatedHeaders;
+ }
+ function sanitizeCloseReason(reason) {
+@@ -4611,11 +4636,14 @@
+   try {
+     const upstreamResponse = await fetch(buildProxyRequest(request, target, clientIp));
+     const responseHeaders = new Headers(upstreamResponse.headers);
++    // Bun fetch decodes the upstream body; do not label decoded bytes as Brotli/gzip.
++    responseHeaders.delete("content-encoding");
++    responseHeaders.delete("content-length");
+     rewriteLocationHeader(responseHeaders, target.upstreamHttpUrl.origin, target.requestOrigin.origin);
+     const contentType = responseHeaders.get("content-type")?.toLowerCase() || "";
+     if (contentType.includes("text/html")) {
+       const html = await upstreamResponse.text();
+-      const patchedHtml = injectControlUiBootstrap(html, target.instance.proxyBasePath);
++      const patchedHtml = injectControlUiBootstrap(html, target.instance.proxyBasePath, target.authToken);
+       const patchedHeaders = applyPatchedControlUiHeaders(responseHeaders, patchedHtml);
+       return new Response(patchedHtml, {
+         status: upstreamResponse.status,
+@@ -8055,7 +8083,8 @@
+   const patchedFiles = [];
+   for (const pluginRoot of pluginRoots) {
+     const version = readPluginVersion(pluginRoot);
+-    if (version !== OPENCLAW_WEIXIN_PLUGIN_VERSION) {
++    // The legacy source rewrite applies only to the original 2.4.1 plugin.
++    if (version !== "2.4.1") {
+       continue;
+     }
+     const channelPath = join4(pluginRoot, "dist", "src", "channel.js");
+@@ -11988,11 +12017,11 @@
+     return;
+   }
+   emitLog(enqueue, "info", `Running OpenClaw bundled plugin postinstall script ${stageScriptPath}`);
+-  const nodeExecPath = Bun.which("node");
++  const env = managedBundledPluginRuntimeEnv(instance);
++  const nodeExecPath = Bun.which("node", { PATH: env.PATH });
+   if (!nodeExecPath) {
+     throw new Error("Node.js executable not found in PATH; cannot run bundled plugin postinstall.");
+   }
+-  const env = managedBundledPluginRuntimeEnv(instance);
+   const proc = Bun.spawn([nodeExecPath, stageScriptPath], {
+     cwd: packageRoot,
+     env,

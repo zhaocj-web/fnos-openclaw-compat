@@ -1,0 +1,54 @@
+[
+  {
+    "stepTitle": "OpenClaw 兼容助手",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "仅支持飞牛 OpenClaw 0.1.5、x86_64、单个默认受管实例。检查不会改动服务；应用补丁会停止服务、完整备份、下载固定版本依赖并迁移数据。备份保存在原 OpenClaw 的 compat-backups 中。新浏览器需正常设备配对；不包含个人数据。当前已打补丁机器请选择“仅检查”。本助手无独立桌面入口；应用设置可再次检查或回滚。"
+      },
+      {
+        "type": "select",
+        "field": "wizard_action",
+        "label": "操作",
+        "initValue": "check",
+        "options": [
+          {
+            "label": "仅检查（不修改）",
+            "value": "check"
+          },
+          {
+            "label": "应用兼容补丁并固定 2026.10.5",
+            "value": "apply"
+          },
+          {
+            "label": "从完整备份回滚",
+            "value": "rollback"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "field": "wizard_browser",
+        "label": "应用补丁时的浏览器组件",
+        "initValue": "yes",
+        "options": [
+          {
+            "label": "安装专用 Chromium（需要下载）",
+            "value": "yes"
+          },
+          {
+            "label": "跳过浏览器组件",
+            "value": "no"
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "field": "wizard_backup",
+        "label": "回滚备份目录（仅回滚时填写）",
+        "initValue": "",
+        "rules": []
+      }
+    ]
+  }
+]

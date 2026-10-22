@@ -1,0 +1,13 @@
+appname = fnos-openclaw-compat
+version = 1.0.1
+display_name = OpenClaw 兼容助手
+desc = 适配飞牛 OpenClaw 0.1.5，保留原管理入口，固定内核 2026.10.5。包含版本检查、完整备份、兼容补丁、终端 WASM 与浏览器支持及回滚。安装和设置中选择操作；无常驻服务。非官方预览包，未做跨设备安装实测。卸载助手不回退内核、不删除备份。
+platform = x86
+source = thirdparty
+maintainer = X.Zoe
+distributor = X.Zoe
+os_min_version = 1.1.3107
+install_dep_apps = trim.openclaw:nodejs_v24:bunjs>=1.3.9
+ctl_stop = false
+wizard_dir = wizard
+changelog = 修复安装阶段 Node.js 准备失败；优先复用本机合适版本，并将失败详情保存在独立备份目录。已实测从原版 2026.5.4 升级到 2026.10.5。

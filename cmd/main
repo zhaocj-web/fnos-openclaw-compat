@@ -1,0 +1,6 @@
+#!/bin/bash
+# Configuration utility: no daemon, network listener, or scheduled task.
+case "${1:-}" in
+    start|stop|status) exit 0 ;;
+    *) exit 1 ;;
+esac
