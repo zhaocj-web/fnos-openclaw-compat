@@ -1,4 +1,4 @@
-飞牛 OpenClaw 2026.10.5 兼容补丁包 v1.0.1
+飞牛 OpenClaw 2026.10.5 兼容补丁包 v1.0.2
 
 这是从本机已验证方案整理的社区兼容补丁，不是飞牛或 OpenClaw 官方插件。
 保留飞牛管理平台，固定 OpenClaw 2026.10.5、微信插件 2.4.10。
@@ -83,3 +83,5 @@
   SHA256SUMS            包内文件校验值
 
 1.0.1 修正：优先复用本机 Node.js 24.20.0，避免安装阶段的重复下载；失败详情同时保存到原 OpenClaw 的 compat-backups/时间戳/install-error.log，助手安装失败后仍可查看。
+
+1.0.2 修正：识别 Unix 通道中有效的 X-Real-IP，重建而非追加转发链，修复局域网访问 proxy_attribution_required。TCP 直连仍以真实 peer 地址归属。保留本机可信代理范围；支持从已知 1.0.1 构建增量更新。

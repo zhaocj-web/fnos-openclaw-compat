@@ -59,6 +59,16 @@ class TransactionTests(unittest.TestCase):
             override.start()
             self.addCleanup(override.stop)
 
+    def test_incremental_patch_is_selected_for_known_previous_build(self):
+        target = 'updated fixture server\n'
+        (self.root / 'delta.patch').write_text('--- a\n+++ b\n@@ -1 +1 @@\n-fixture server\n+updated fixture server\n')
+        with patch.object(compat, 'HERE', self.root), \
+                patch.dict(compat.MANIFEST, {'patchedServerSha256': compat.digest(target.encode()),
+                                          'upgradePatches': {self.hash: 'delta.patch'}}), \
+                patch.object(compat, 'action') as action:
+            compat.install(dry_run=True)
+            action.assert_not_called()
+
     def test_dry_run_never_stops_or_writes(self):
         with patch.object(compat, 'action') as action, patch.object(compat, 'snapshot') as backup:
             compat.install(dry_run=True)

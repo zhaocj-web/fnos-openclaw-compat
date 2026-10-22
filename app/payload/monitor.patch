@@ -1,6 +1,11 @@
 --- server/index.js.original
 +++ server/index.js
-@@ -2547,12 +2547,12 @@
+@@ -1,3 +1,4 @@
++import { isIP as compatIsIP } from "node:net";
+ // @bun
+ var __create = Object.create;
+ var __getProtoOf = Object.getPrototypeOf;
+@@ -2547,12 +2548,12 @@
  var MONITOR_ACCESS_MODE = process.env.MONITOR_ACCESS_MODE === "public" ? "public" : "lan";
  var OPENCLAW_NPM_REGISTRY = process.env.OPENCLAW_NPM_REGISTRY || "https://registry.npmmirror.com/";
  var OPENCLAW_VERSION = process.env.OPENCLAW_VERSION || "2026.5.4";
@@ -16,7 +21,7 @@
  var OPENCLAW_QQBOT_PLUGIN_VERSION = process.env.OPENCLAW_QQBOT_PLUGIN_VERSION || "2026.5.4";
  var OPENCLAW_CHANNEL_PLUGIN_SPECS = {
    feishu: `@openclaw/feishu@${OPENCLAW_FEISHU_PLUGIN_VERSION}`,
-@@ -3370,7 +3370,7 @@
+@@ -3370,7 +3371,7 @@
      ...sharedEnv,
      HOME: instance.homeDir,
      OPENCLAW_CONFIG_PATH: configPath,
@@ -25,7 +30,7 @@
    };
  }
  function openclawBinPath(instance) {
-@@ -3550,7 +3550,20 @@
+@@ -3550,7 +3551,20 @@
    }
    return {};
  }
@@ -46,7 +51,7 @@
    if (!usesSystemOpenclaw(instance)) {
      await ensureInstanceDirectories(instance);
    }
-@@ -4222,6 +4235,7 @@
+@@ -4222,6 +4236,7 @@
      allowedOrigins: nextAllowedOrigins
    });
    mkdirSync4(dirname3(configPath), { recursive: true });
@@ -54,7 +59,38 @@
    await Bun.write(configPath, JSON.stringify(config, null, 2));
    configCache.delete(configPath);
    return true;
-@@ -4403,7 +4417,7 @@
+@@ -4346,15 +4361,16 @@
+   };
+ }
+ function forwardedForValue(request, clientIp) {
+-  const existing = request.headers.get("x-forwarded-for")?.trim();
+-  if (existing && clientIp) {
+-    return `${existing}, ${clientIp}`;
+-  }
+-  return existing || clientIp || null;
++  // Rebuild attribution from the verified transport source, not an inbound chain.
++  return compatNormalizeClientIp(clientIp) || null;
+ }
+ function buildBaseProxyHeaders(request, target, clientIp) {
+   const requestUrl = new URL(request.url);
+   const headers = new Headers(request.headers);
++  headers.delete("forwarded");
++  for (const key of [...headers.keys()]) {
++    if (key.startsWith("tailscale-")) headers.delete(key);
++  }
+   const forwardedFor = forwardedForValue(request, clientIp);
+   headers.set("host", `127.0.0.1:${target.port}`);
+   headers.set("x-forwarded-host", target.requestOrigin.host);
+@@ -4369,6 +4385,8 @@
+   }
+   if (forwardedFor) {
+     headers.set("x-forwarded-for", forwardedFor);
++  } else {
++    headers.delete("x-forwarded-for");
+   }
+   for (const headerName of HOP_BY_HOP_HEADERS) {
+     headers.delete(headerName);
+@@ -4403,7 +4421,7 @@
      responseHeaders.set("location", rewritten.toString());
    } catch {}
  }
@@ -63,7 +99,7 @@
    const serializedBasePath = JSON.stringify(proxyBasePath);
    const serializedSettingsKey = JSON.stringify(CONTROL_UI_SETTINGS_KEY);
    const serializedTokenKey = JSON.stringify(CONTROL_UI_TOKEN_KEY);
-@@ -4453,12 +4467,20 @@
+@@ -4453,12 +4471,20 @@
      "      }",
      "    }",
      "  } catch {}",
@@ -86,7 +122,7 @@
    if (html.includes('<script type="module"')) {
      return html.replace('<script type="module"', `${script}<script type="module"`);
    }
-@@ -4496,9 +4518,9 @@
+@@ -4496,9 +4522,9 @@
  }
  function buildControlUiScriptSrcDirective(inlineScriptHashes) {
    if (inlineScriptHashes.length === 0) {
@@ -99,7 +135,7 @@
  }
  function rebuildControlUiCspHeader(existingHeader, patchedHtml) {
    const inlineScriptHashes = computeInlineScriptHashes(patchedHtml);
-@@ -4526,8 +4548,11 @@
+@@ -4526,8 +4552,11 @@
  function applyPatchedControlUiHeaders(responseHeaders, patchedHtml) {
    const updatedHeaders = new Headers(responseHeaders);
    updatedHeaders.delete("content-length");
@@ -112,7 +148,7 @@
    return updatedHeaders;
  }
  function sanitizeCloseReason(reason) {
-@@ -4611,11 +4636,14 @@
+@@ -4611,11 +4640,14 @@
    try {
      const upstreamResponse = await fetch(buildProxyRequest(request, target, clientIp));
      const responseHeaders = new Headers(upstreamResponse.headers);
@@ -128,7 +164,7 @@
        const patchedHeaders = applyPatchedControlUiHeaders(responseHeaders, patchedHtml);
        return new Response(patchedHtml, {
          status: upstreamResponse.status,
-@@ -8055,7 +8083,8 @@
+@@ -8055,7 +8087,8 @@
    const patchedFiles = [];
    for (const pluginRoot of pluginRoots) {
      const version = readPluginVersion(pluginRoot);
@@ -138,7 +174,7 @@
        continue;
      }
      const channelPath = join4(pluginRoot, "dist", "src", "channel.js");
-@@ -11988,11 +12017,11 @@
+@@ -11988,11 +12021,11 @@
      return;
    }
    emitLog(enqueue, "info", `Running OpenClaw bundled plugin postinstall script ${stageScriptPath}`);
@@ -152,3 +188,37 @@
    const proc = Bun.spawn([nodeExecPath, stageScriptPath], {
      cwd: packageRoot,
      env,
+@@ -14340,16 +14373,26 @@
+   app10.get(`${basePath}/`, indexHandler);
+   app10.get(`${basePath}/*`, indexHandler);
+ }
++function compatNormalizeClientIp(value) {
++  const ip = typeof value === "string" ? value.trim() : "";
++  if (!compatIsIP(ip)) return undefined;
++  return ip.toLowerCase().startsWith("::ffff:") && compatIsIP(ip.slice(7)) === 4 ? ip.slice(7) : ip;
++}
++function compatIsLoopbackClientIp(value) {
++  const ip = compatNormalizeClientIp(value);
++  return ip === "::1" || Boolean(ip?.startsWith("127."));
++}
+ function forwardedClientIp(request) {
+-  const forwardedFor = request.headers.get("x-forwarded-for");
+-  if (!forwardedFor) {
+-    return;
+-  }
+-  const clientIp = forwardedFor.split(",").map((value) => value.trim()).find(Boolean);
+-  return clientIp || undefined;
++  // Called only for the Unix transport owned by the fnOS gateway.
++  const real = compatNormalizeClientIp(request.headers.get("x-real-ip"));
++  if (real && !compatIsLoopbackClientIp(real)) return real;
++  const chain = (request.headers.get("x-forwarded-for") || "").split(",").reverse();
++  return chain.map(compatNormalizeClientIp).find((ip) => ip && !compatIsLoopbackClientIp(ip));
+ }
+ function resolveClientIp(request, server) {
+-  return server.requestIP(request)?.address || forwardedClientIp(request) || (socketPath ? "127.0.0.1" : undefined);
++  const peer = compatNormalizeClientIp(server.requestIP(request)?.address);
++  if (socketPath) return forwardedClientIp(request) || peer || "127.0.0.1";
++  return peer;
+ }
+ if (socketPath) {
+   console.log(`Server is running on unix socket ${socketPath}`);

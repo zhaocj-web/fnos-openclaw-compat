@@ -6,7 +6,7 @@
 
 ## 下载与安装
 
-安装包：[fnos-openclaw-compat-1.0.1-x86.fpk](dist/fnos-openclaw-compat-1.0.1-x86.fpk)。
+安装包：[fnos-openclaw-compat-1.0.2-x86.fpk](dist/fnos-openclaw-compat-1.0.2-x86.fpk)。
 
 1. 从飞牛应用中心安装并启用原版“飞牛 OpenClaw” **0.1.5**。
 2. 在应用中心手动安装本项目的 FPK。
@@ -96,3 +96,9 @@ python3 -m unittest -v tests.py
 - 添加“不触发网络下载”的运行时回归测试。
 
 本仓库只包含通用脚本、补丁、版本清单和构建产物，不包含本机环境变量、数据库、登录信息或聊天记录，也不分发原飞牛管理平台的完整源码。
+
+## 1.0.2 修复
+
+飞牛 Unix 网关传递 X-Real-IP 时也能识别客户端地址；从右向左读取有效转发链并覆盖生成上游 X-Forwarded-For，丢弃冲突的 Forwarded/Tailscale 归属头。TCP 直连仅使用真实 peer 地址，不信任来路头。仍只信任本机代理，不放宽整个局域网。支持从已知 1.0.1 源码哈希增量安装，未知构建继续拒绝修改。
+
+1.0.2 验证：原版与 1.0.1 增量补丁均生成相同目标哈希；10 项 Python 测试通过，7 项客户端归属边界检查通过，X-Real-IP 单头与含回环地址的局域网链路实测 HTTP 200。

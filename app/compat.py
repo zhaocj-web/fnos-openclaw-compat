@@ -148,7 +148,7 @@ def inspect():
     if not re.search(r'^version\s*=\s*0\.1\.5\s*$', manifest, re.M):
         raise RuntimeError('Only fnOS trim.openclaw 0.1.5 is supported')
     current = digest(SERVER.read_bytes())
-    allowed = [MANIFEST['originalServerSha256'], MANIFEST['patchedServerSha256']]
+    allowed = [MANIFEST['originalServerSha256'], MANIFEST['patchedServerSha256']] + list(MANIFEST.get('upgradePatches', {}))
     if current not in allowed:
         raise RuntimeError('Unknown management server build; refusing to overwrite it')
     if not BUN.is_file():
@@ -397,7 +397,8 @@ def install(dry_run=False, with_browser=True):
     state = inspect()
     say('Supported fnOS app: 0.1.5; current OpenClaw: ' + state['core'])
     source = SERVER.read_text()
-    patched = source if state['serverHash'] == MANIFEST['patchedServerSha256'] else apply_patch(source, (HERE / 'payload/monitor.patch').read_text())
+    patch_name = MANIFEST.get('upgradePatches', {}).get(state['serverHash'], 'payload/monitor.patch')
+    patched = source if state['serverHash'] == MANIFEST['patchedServerSha256'] else apply_patch(source, (HERE / patch_name).read_text())
     if digest(patched.encode()) != MANIFEST['patchedServerSha256']:
         raise RuntimeError('Patched server checksum mismatch')
     if dry_run:
