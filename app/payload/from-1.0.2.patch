@@ -1,0 +1,29 @@
+--- a/server/index.js
++++ b/server/index.js
+@@ -4387,6 +4387,16 @@
+     headers.set("x-forwarded-for", forwardedFor);
+   } else {
+     headers.delete("x-forwarded-for");
++  }
++  // fnOS authenticates its Unix gateway but does not supply a browser IP.
++  // Keep this hop an honest local service connection; never invent an address.
++  const fnosLocalBridge = socketPath && !forwardedClientIp(request)
++    && /^\d+$/.test(request.headers.get("x-trim-userid") || "")
++    && ["true", "false"].includes(request.headers.get("x-trim-isadmin"));
++  if (fnosLocalBridge) {
++    for (const key of [...headers.keys()]) {
++      if (key === "forwarded" || key === "x-real-ip" || key.startsWith("x-forwarded-")) headers.delete(key);
++    }
+   }
+   for (const headerName of HOP_BY_HOP_HEADERS) {
+     headers.delete(headerName);
+@@ -14430,6 +14440,6 @@
+   }
+ });
+ if (socketPath) {
+-  chmodSync3(socketPath, 511);
+-  console.log(`Socket permissions set to 777: ${socketPath}`);
+-}
++  chmodSync3(socketPath, 384);
++  console.log(`Socket permissions set to 600: ${socketPath}`);
++}

@@ -315,6 +315,8 @@ def normalize_config():
     ui.pop('allowInsecureAuth', None)
     ui.pop('dangerouslyDisableDeviceAuth', None)
     config.pop('cli', None)
+    # The authenticated fnOS Unix bridge is local; browsers still require approval.
+    config.setdefault('gateway', {}).setdefault('nodes', {}).setdefault('pairing', {})['autoApproveLocal'] = False
     config.setdefault('update', {}).update(checkOnStart=False)
     config['update'].setdefault('auto', {})['enabled'] = False
     preserve_write(CONFIG, (json.dumps(config, indent=2, ensure_ascii=False) + '\n').encode())
@@ -371,6 +373,15 @@ def verify(env, log):
     if not state.get('running') or MANIFEST['openclawVersion'] not in (state.get('version') or ''):
         raise RuntimeError('Gateway version or running state check failed')
     cli(['health', '--json'], env, log)
+    # Exercise the real fnOS gateway contract: authenticated user headers, no IP.
+    connection = UnixHTTP('localhost', timeout=30)
+    connection.request('GET', '/app/trim-openclaw/default/', headers={
+        'X-Trim-Userid': '1000', 'X-Trim-Isadmin': 'true', 'X-Forwarded-Proto': 'http'})
+    response = connection.getresponse()
+    body = response.read().decode()
+    connection.close()
+    if response.status != 200 or 'proxy_attribution_required' in body:
+        raise RuntimeError('fnOS authenticated Unix entry check failed')
     # Renderability checks: compressed headers, iframe policy, WASM policy, and real assets.
     connection = UnixHTTP('localhost', timeout=30)
     connection.request('GET', '/app/trim-openclaw/default/', headers={'X-Forwarded-For': '192.0.2.1'})

@@ -6,7 +6,7 @@
 
 ## 下载与安装
 
-安装包：[fnos-openclaw-compat-1.0.2-x86.fpk](dist/fnos-openclaw-compat-1.0.2-x86.fpk)。
+安装包：[fnos-openclaw-compat-1.0.3-x86.fpk](dist/fnos-openclaw-compat-1.0.3-x86.fpk)。
 
 1. 从飞牛应用中心安装并启用原版“飞牛 OpenClaw” **0.1.5**。
 2. 在应用中心手动安装本项目的 FPK。
@@ -102,3 +102,12 @@ python3 -m unittest -v tests.py
 飞牛 Unix 网关传递 X-Real-IP 时也能识别客户端地址；从右向左读取有效转发链并覆盖生成上游 X-Forwarded-For，丢弃冲突的 Forwarded/Tailscale 归属头。TCP 直连仅使用真实 peer 地址，不信任来路头。仍只信任本机代理，不放宽整个局域网。支持从已知 1.0.1 源码哈希增量安装，未知构建继续拒绝修改。
 
 1.0.2 验证：原版与 1.0.1 增量补丁均生成相同目标哈希；10 项 Python 测试通过，7 项客户端归属边界检查通过，X-Real-IP 单头与含回环地址的局域网链路实测 HTTP 200。
+
+
+## 1.0.3 飞牛入口修复
+
+修复从飞牛“打开 OpenClaw”进入时的 `proxy_attribution_required`。实际飞牛 Unix 网关提供已登录用户身份，但没有提供客户端 IP；1.0.2 的 IP 请求头兼容不足以覆盖该入口。
+
+对携带有效格式飞牛用户身份、且没有客户端 IP 的 Unix 请求，助手按本地服务连接转发并移除代理归属请求头，不伪造客户端 IP。Unix socket 权限由 777 收紧为 600，允许应用自身和 root 飞牛网关访问。令牌和设备签名校验保持启用，同时设置 `gateway.nodes.pairing.autoApproveLocal=false`，新浏览器仍需配对批准。有客户端 IP 的请求继续使用原有的代理归属路径。
+
+支持从原版、助手 1.0.1 和 1.0.2 增量应用补丁，目标文件校验一致。11 项 Python 测试和 6 项 Unix 桥接边界检查通过。已在本机完成健康检查，并用与飞牛入口相同的无 IP 身份头完成浏览器 HTTP/WebSocket 测试：页面正常加载、新设备返回配对要求，无代理归属错误。真实登录窗口仍需用户点击验证；本次打包未执行卸载重装测试。

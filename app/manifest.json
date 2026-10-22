@@ -1,5 +1,5 @@
 {
-  "packageVersion": "1.0.2",
+  "packageVersion": "1.0.3",
   "application": "trim.openclaw",
   "applicationVersion": "0.1.5",
   "architecture": "x86_64",
@@ -7,10 +7,11 @@
   "weixinVersion": "2.4.10",
   "nodeVersion": "24.20.0",
   "originalServerSha256": "de14e2dbe05b7db1ddb1fe84e9e801ac18981c3a45824a44064fe52a1ab6e8cf",
-  "patchedServerSha256": "3ea290443acb6c55ee26b850d1722fa07ba8c055fad8a60a999d7949c6670db5",
+  "patchedServerSha256": "0cf0abe4c90b40f12dc8ed05d551151bb9cc93d4127686aa057382fa556f3cd7",
   "playwrightVersion": "1.64.1",
   "chromiumRevision": "1248",
   "upgradePatches": {
-    "158a5c487e59b70725d62de0a171304b5b5978e9feabdba0755a8da3c6df847f": "payload/from-1.0.1.patch"
+    "158a5c487e59b70725d62de0a171304b5b5978e9feabdba0755a8da3c6df847f": "payload/from-1.0.1.patch",
+    "3ea290443acb6c55ee26b850d1722fa07ba8c055fad8a60a999d7949c6670db5": "payload/from-1.0.2.patch"
   }
 }

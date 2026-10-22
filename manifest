@@ -1,5 +1,5 @@
 appname = fnos-openclaw-compat
-version = 1.0.2
+version = 1.0.3
 display_name = OpenClaw 兼容助手
 desc = 适配飞牛 OpenClaw 0.1.5，保留原管理入口，固定内核 2026.10.5。包含版本检查、完整备份、兼容补丁、终端 WASM 与浏览器支持及回滚。安装和设置中选择操作；无常驻服务。非官方预览包，未做跨设备安装实测。卸载助手不回退内核、不删除备份。
 platform = x86

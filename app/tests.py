@@ -107,5 +107,22 @@ class TransactionTests(unittest.TestCase):
             action.assert_not_called()
 
 
+class ConfigTests(unittest.TestCase):
+    def test_local_bridge_retains_auth_and_requires_device_approval(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = Path(temporary) / 'openclaw.json'
+            config.write_text(json.dumps({'gateway': {
+                'auth': {'mode': 'token', 'token': 'fixture-only'},
+                'trustedProxies': ['127.0.0.1', '::1'],
+                'controlUi': {'dangerouslyDisableDeviceAuth': True}}}))
+            with patch.object(compat, 'CONFIG', config):
+                compat.normalize_config()
+            result = json.loads(config.read_text())['gateway']
+            self.assertEqual(result['auth'], {'mode': 'token', 'token': 'fixture-only'})
+            self.assertEqual(result['trustedProxies'], ['127.0.0.1', '::1'])
+            self.assertFalse(result['nodes']['pairing']['autoApproveLocal'])
+            self.assertNotIn('dangerouslyDisableDeviceAuth', result['controlUi'])
+
+
 if __name__ == '__main__':
     unittest.main()
